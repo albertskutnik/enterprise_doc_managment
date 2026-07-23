@@ -1,2 +1,5 @@
 backend/target/
 *.class
+backend/uploads/
+backend/.env
+backend/src/main/resources/application-local.properties
