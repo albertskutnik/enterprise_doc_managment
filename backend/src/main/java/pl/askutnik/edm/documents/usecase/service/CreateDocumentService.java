@@ -9,7 +9,7 @@ import pl.askutnik.edm.documents.usecase.port.out.DocumentRepository;
 
 @Service
 public class CreateDocumentService implements CreateDocumentUseCase {
-    private DocumentRepository documentRepository;
+    private final DocumentRepository documentRepository;
 
     public CreateDocumentService(DocumentRepository documentRepository) {
         this.documentRepository = documentRepository;
@@ -18,12 +18,11 @@ public class CreateDocumentService implements CreateDocumentUseCase {
     @Override
     public Document createDocument(CreateDocumentCommand command) {
         Document document = Document.create(
-            command.getName(), 
-            command.getContentType(), 
+            command.getName(),
+            command.getContentType(),
             command.getSize()
         );
 
         return documentRepository.save(document);
     }
-    
 }
