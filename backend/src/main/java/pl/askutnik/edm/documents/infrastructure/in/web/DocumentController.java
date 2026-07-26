@@ -1,18 +1,30 @@
 package pl.askutnik.edm.documents.infrastructure.in.web;
 
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import pl.askutnik.edm.documents.infrastructure.out.persistence.InMemoryDocumentRepository;
 import pl.askutnik.edm.documents.model.Document;
@@ -21,19 +33,37 @@ import pl.askutnik.edm.documents.model.Document;
 @RequestMapping("/api/documents")
 public class DocumentController {
 
+    private final Path uploadDirectory = Path.of("uploads");
     private final InMemoryDocumentRepository documentRepository;
 
-    public DocumentController(InMemoryDocumentRepository documentRepository) {
+    public DocumentController(InMemoryDocumentRepository documentRepository) throws IOException {
         this.documentRepository = documentRepository;
+        Files.createDirectories(uploadDirectory);
     }
 
-    @PostMapping
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    public DocumentResponse createDocument(@RequestBody CreateDocumentRequest request) {
+    public DocumentResponse createDocument(@RequestParam("file") MultipartFile file) throws IOException {
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("File cannot be empty");
+        }
+
+        String originalFileName = file.getOriginalFilename();
+
+        if (originalFileName == null || originalFileName.isBlank()) {
+            throw new IllegalArgumentException("File name cannot be empty");
+        }
+
+        String storageFileName = UUID.randomUUID() + "-" + originalFileName;
+        Path storagePath = uploadDirectory.resolve(storageFileName);
+
+        file.transferTo(storagePath);
+
         Document document = Document.create(
-            request.name(),
-            request.contentType(),
-            request.size()
+            originalFileName,
+            file.getContentType(),
+            file.getSize(),
+            storageFileName
         );
 
         return DocumentResponse.from(documentRepository.save(document));
@@ -49,17 +79,43 @@ public class DocumentController {
 
     @GetMapping("/{id}")
     public DocumentResponse getDocumentById(@PathVariable UUID id) {
-        Document document = documentRepository.findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        Document document = findDocument(id);
 
         return DocumentResponse.from(document);
     }
 
-    public record CreateDocumentRequest(
-        String name,
-        String contentType,
-        long size
-    ) {
+    @GetMapping("/{id}/download")
+    public ResponseEntity<Resource> downloadDocument(@PathVariable UUID id) throws MalformedURLException {
+        Document document = findDocument(id);
+
+        Path filePath = uploadDirectory.resolve(document.storageFileName());
+        Resource resource = new UrlResource(filePath.toUri());
+
+        if (!resource.exists()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+
+        return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType(document.contentType()))
+            .header(
+                HttpHeaders.CONTENT_DISPOSITION,
+                ContentDisposition.attachment()
+                    .filename(document.name())
+                    .build()
+                    .toString()
+            )
+            .body(resource);
+    }
+
+    private Document findDocument(UUID id) {
+        return documentRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleIllegalArgumentException(IllegalArgumentException exception) {
+        return new ErrorResponse(exception.getMessage());
     }
 
     public record DocumentResponse(
@@ -78,5 +134,8 @@ public class DocumentController {
                 document.createdAt()
             );
         }
+    }
+
+    public record ErrorResponse(String message) {
     }
 }

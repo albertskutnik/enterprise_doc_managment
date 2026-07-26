@@ -8,6 +8,7 @@ public record Document(
     String name,
     String contentType,
     long size,
+    String storageFileName,
     Instant createdAt
 ) {
     public Document {
@@ -30,14 +31,19 @@ public record Document(
         if (createdAt == null) {
             throw new IllegalArgumentException("Document creation date cannot be empty");
         }
+
+        if (storageFileName == null || storageFileName.isBlank()) {
+            throw new IllegalArgumentException("Document storage file name cannot be empty");
+        }
     }
 
-    public static Document create(String name, String contentType, long size) {
+    public static Document create(String name, String contentType, long size, String storageFileName) {
         return new Document(
             UUID.randomUUID(),
             name,
             contentType,
             size,
+            storageFileName,
             Instant.now()
         );
     }
