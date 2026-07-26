@@ -15,6 +15,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -137,5 +138,15 @@ public class DocumentController {
     }
 
     public record ErrorResponse(String message) {
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteDocument(@PathVariable UUID id) throws IOException {
+        Document document = findDocument(id);
+        Path filePath = uploadDirectory.resolve(document.storageFileName());
+        Files.deleteIfExists(filePath);
+
+        documentRepository.deleteById(id);
     }
 }

@@ -1,6 +1,7 @@
 package pl.askutnik.edm.documents.infrastructure.out.persistence;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,5 +28,18 @@ public class InMemoryDocumentRepository {
         return documents.stream()
             .filter(document -> document.id().equals(id))
             .findFirst();
+    }
+
+    public void deleteById(UUID id) {
+        Iterator<Document> iterator = documents.iterator();
+
+        while (iterator.hasNext()) {
+            Document document = iterator.next();
+
+            if(document.id().equals(id)){
+                iterator.remove();
+                return;
+            }
+        }
     }
 }
