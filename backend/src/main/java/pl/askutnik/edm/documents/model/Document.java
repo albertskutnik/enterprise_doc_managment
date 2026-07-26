@@ -10,7 +10,7 @@ public record Document(
     long size,
     Instant createdAt
 ) {
-    public Document{
+    public Document {
         if (id == null) {
             throw new IllegalArgumentException("Document id cannot be empty");
         }
