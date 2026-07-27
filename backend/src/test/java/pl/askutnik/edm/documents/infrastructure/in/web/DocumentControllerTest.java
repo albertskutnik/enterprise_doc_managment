@@ -4,10 +4,16 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -20,23 +26,50 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import pl.askutnik.edm.documents.infrastructure.in.web.DocumentController.DocumentResponse;
-import pl.askutnik.edm.documents.infrastructure.out.persistence.InMemoryDocumentRepository;
+import pl.askutnik.edm.documents.infrastructure.out.persistence.DocumentRepository;
+import pl.askutnik.edm.documents.model.Document;
 
 class DocumentControllerTest {
 
-    private InMemoryDocumentRepository documentRepository;
+    private List<Document> documents;
+    private DocumentRepository documentRepository;
     private DocumentController documentController;
 
     @BeforeEach
     void setUp() throws IOException {
-        documentRepository = new InMemoryDocumentRepository();
+        documents = new ArrayList<>();
+        documentRepository = mock(DocumentRepository.class);
+
+        when(documentRepository.save(any(Document.class))).thenAnswer(invocation -> {
+            Document document = invocation.getArgument(0);
+            documents.add(document);
+            return document;
+        });
+
+        when(documentRepository.findAll()).thenAnswer(invocation -> new ArrayList<>(documents));
+
+        when(documentRepository.findById(any(UUID.class))).thenAnswer(invocation -> {
+            UUID id = invocation.getArgument(0);
+
+            return documents.stream()
+                .filter(document -> document.getId().equals(id))
+                .findFirst();
+        });
+
+        doAnswer(invocation -> {
+            UUID id = invocation.getArgument(0);
+            documents.removeIf(document -> document.getId().equals(id));
+
+            return null;
+        }).when(documentRepository).deleteById(any(UUID.class));
+
         documentController = new DocumentController(documentRepository);
     }
 
     @AfterEach
     void cleanUp() throws IOException {
-        for (var document : documentRepository.findAll()) {
-            Files.deleteIfExists(Path.of("uploads").resolve(document.storageFileName()));
+        for (Document document : documents) {
+            Files.deleteIfExists(Path.of("uploads").resolve(document.getStorageFileName()));
         }
     }
 
@@ -56,7 +89,7 @@ class DocumentControllerTest {
         assertEquals("text/plain", response.contentType());
         assertEquals(5, response.size());
         assertNotNull(response.createdAt());
-        assertEquals(1, documentRepository.findAll().size());
+        assertEquals(1, documents.size());
     }
 
     @Test
@@ -118,10 +151,12 @@ class DocumentControllerTest {
         DocumentResponse createdDocument = documentController.createDocument(file);
 
         ResponseEntity<Resource> response = documentController.downloadDocument(createdDocument.id());
+        Resource resource = response.getBody();
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals("text/plain", response.getHeaders().getContentType().toString());
-        assertArrayEquals(content, response.getBody().getInputStream().readAllBytes());
+        assertNotNull(resource);
+        assertArrayEquals(content, resource.getInputStream().readAllBytes());
     }
 
     @Test
@@ -136,7 +171,7 @@ class DocumentControllerTest {
 
         documentController.deleteDocument(createdDocument.id());
 
-        assertEquals(0, documentRepository.findAll().size());
+        assertEquals(0, documents.size());
         assertThrows(
             ResponseStatusException.class,
             () -> documentController.getDocumentById(createdDocument.id())

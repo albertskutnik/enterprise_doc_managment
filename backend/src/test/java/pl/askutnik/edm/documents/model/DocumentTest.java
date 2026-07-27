@@ -17,12 +17,12 @@ class DocumentTest {
             "stored-test.pdf"
         );
 
-        assertNotNull(document.id());
-        assertEquals("test.pdf", document.name());
-        assertEquals("application/pdf", document.contentType());
-        assertEquals(1234, document.size());
-        assertEquals("stored-test.pdf", document.storageFileName());
-        assertNotNull(document.createdAt());
+        assertNotNull(document.getId());
+        assertEquals("test.pdf", document.getName());
+        assertEquals("application/pdf", document.getContentType());
+        assertEquals(1234, document.getSize());
+        assertEquals("stored-test.pdf", document.getStorageFileName());
+        assertNotNull(document.getCreatedAt());
     }
 
     @Test

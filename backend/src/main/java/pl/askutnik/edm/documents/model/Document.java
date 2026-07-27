@@ -3,15 +3,34 @@ package pl.askutnik.edm.documents.model;
 import java.time.Instant;
 import java.util.UUID;
 
-public record Document(
-    UUID id,
-    String name,
-    String contentType,
-    long size,
-    String storageFileName,
-    Instant createdAt
-) {
-    public Document {
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+@Entity
+@Table(name = "documents")
+public class Document {
+
+    @Id
+    private UUID id;
+
+    private String name;
+    private String contentType;
+    private long size;
+    private String storageFileName;
+    private Instant createdAt;
+
+    protected Document() {
+    }
+
+    private Document(
+        UUID id,
+        String name,
+        String contentType,
+        long size,
+        String storageFileName,
+        Instant createdAt
+    ) {
         if (id == null) {
             throw new IllegalArgumentException("Document id cannot be empty");
         }
@@ -35,6 +54,13 @@ public record Document(
         if (storageFileName == null || storageFileName.isBlank()) {
             throw new IllegalArgumentException("Document storage file name cannot be empty");
         }
+
+        this.id = id;
+        this.name = name;
+        this.contentType = contentType;
+        this.size = size;
+        this.storageFileName = storageFileName;
+        this.createdAt = createdAt;
     }
 
     public static Document create(String name, String contentType, long size, String storageFileName) {
@@ -46,5 +72,29 @@ public record Document(
             storageFileName,
             Instant.now()
         );
+    }
+
+    public UUID getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getContentType() {
+        return contentType;
+    }
+
+    public long getSize() {
+        return size;
+    }
+
+    public String getStorageFileName() {
+        return storageFileName;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
     }
 }

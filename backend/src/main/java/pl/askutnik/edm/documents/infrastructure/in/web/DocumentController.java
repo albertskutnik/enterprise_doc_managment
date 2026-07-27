@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
-import pl.askutnik.edm.documents.infrastructure.out.persistence.InMemoryDocumentRepository;
+import pl.askutnik.edm.documents.infrastructure.out.persistence.DocumentRepository;
 import pl.askutnik.edm.documents.model.Document;
 
 @RestController
@@ -35,9 +35,9 @@ import pl.askutnik.edm.documents.model.Document;
 public class DocumentController {
 
     private final Path uploadDirectory = Path.of("uploads");
-    private final InMemoryDocumentRepository documentRepository;
+    private final DocumentRepository documentRepository;
 
-    public DocumentController(InMemoryDocumentRepository documentRepository) throws IOException {
+    public DocumentController(DocumentRepository documentRepository) throws IOException {
         this.documentRepository = documentRepository;
         Files.createDirectories(uploadDirectory);
     }
@@ -89,7 +89,7 @@ public class DocumentController {
     public ResponseEntity<Resource> downloadDocument(@PathVariable UUID id) throws MalformedURLException {
         Document document = findDocument(id);
 
-        Path filePath = uploadDirectory.resolve(document.storageFileName());
+        Path filePath = uploadDirectory.resolve(document.getStorageFileName());
         Resource resource = new UrlResource(filePath.toUri());
 
         if (!resource.exists()) {
@@ -97,11 +97,11 @@ public class DocumentController {
         }
 
         return ResponseEntity.ok()
-            .contentType(MediaType.parseMediaType(document.contentType()))
+            .contentType(MediaType.parseMediaType(document.getContentType()))
             .header(
                 HttpHeaders.CONTENT_DISPOSITION,
                 ContentDisposition.attachment()
-                    .filename(document.name())
+                    .filename(document.getName())
                     .build()
                     .toString()
             )
@@ -128,11 +128,11 @@ public class DocumentController {
     ) {
         public static DocumentResponse from(Document document) {
             return new DocumentResponse(
-                document.id(),
-                document.name(),
-                document.contentType(),
-                document.size(),
-                document.createdAt()
+                document.getId(),
+                document.getName(),
+                document.getContentType(),
+                document.getSize(),
+                document.getCreatedAt()
             );
         }
     }
@@ -144,7 +144,7 @@ public class DocumentController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteDocument(@PathVariable UUID id) throws IOException {
         Document document = findDocument(id);
-        Path filePath = uploadDirectory.resolve(document.storageFileName());
+        Path filePath = uploadDirectory.resolve(document.getStorageFileName());
         Files.deleteIfExists(filePath);
 
         documentRepository.deleteById(id);
