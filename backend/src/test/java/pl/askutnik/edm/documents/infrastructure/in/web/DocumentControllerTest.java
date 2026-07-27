@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -47,6 +48,14 @@ class DocumentControllerTest {
         });
 
         when(documentRepository.findAll()).thenAnswer(invocation -> new ArrayList<>(documents));
+
+        when(documentRepository.findByNameContainingIgnoreCase(anyString())).thenAnswer(invocation -> {
+            String name = invocation.getArgument(0);
+
+            return documents.stream()
+                .filter(document -> document.getName().toLowerCase().contains(name.toLowerCase()))
+                .toList();
+        });
 
         when(documentRepository.findById(any(UUID.class))).thenAnswer(invocation -> {
             UUID id = invocation.getArgument(0);
@@ -110,7 +119,31 @@ class DocumentControllerTest {
         documentController.createDocument(firstFile);
         documentController.createDocument(secondFile);
 
-        assertEquals(2, documentController.listDocuments().size());
+        assertEquals(2, documentController.listDocuments(null).size());
+    }
+
+    @Test
+    void shouldSearchDocumentsByName() throws IOException {
+        MockMultipartFile firstFile = new MockMultipartFile(
+            "file",
+            "invoice.txt",
+            "text/plain",
+            "invoice".getBytes()
+        );
+        MockMultipartFile secondFile = new MockMultipartFile(
+            "file",
+            "contract.txt",
+            "text/plain",
+            "contract".getBytes()
+        );
+
+        documentController.createDocument(firstFile);
+        documentController.createDocument(secondFile);
+
+        List<DocumentResponse> foundDocuments = documentController.listDocuments("voice");
+
+        assertEquals(1, foundDocuments.size());
+        assertEquals("invoice.txt", foundDocuments.get(0).name());
     }
 
     @Test

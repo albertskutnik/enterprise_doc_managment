@@ -71,8 +71,10 @@ public class DocumentController {
     }
 
     @GetMapping
-    public List<DocumentResponse> listDocuments() {
-        return documentRepository.findAll()
+    public List<DocumentResponse> listDocuments(@RequestParam(required = false) String name) {
+        List<Document> documents = findDocuments(name);
+
+        return documents
             .stream()
             .map(DocumentResponse::from)
             .toList();
@@ -111,6 +113,14 @@ public class DocumentController {
     private Document findDocument(UUID id) {
         return documentRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+    }
+
+    private List<Document> findDocuments(String name) {
+        if (name == null || name.isBlank()) {
+            return documentRepository.findAll();
+        }
+
+        return documentRepository.findByNameContainingIgnoreCase(name);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
