@@ -11,7 +11,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,6 +19,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -35,6 +35,9 @@ class DocumentControllerTest {
     private List<Document> documents;
     private DocumentRepository documentRepository;
     private DocumentController documentController;
+
+    @TempDir
+    private Path uploadDirectory;
 
     @BeforeEach
     void setUp() throws IOException {
@@ -72,14 +75,12 @@ class DocumentControllerTest {
             return null;
         }).when(documentRepository).deleteById(any(UUID.class));
 
-        documentController = new DocumentController(documentRepository);
+        documentController = new DocumentController(documentRepository, uploadDirectory.toString());
     }
 
     @AfterEach
-    void cleanUp() throws IOException {
-        for (Document document : documents) {
-            Files.deleteIfExists(Path.of("uploads").resolve(document.getStorageFileName()));
-        }
+    void cleanUp() {
+        documents.clear();
     }
 
     @Test

@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.ContentDisposition;
@@ -34,12 +35,16 @@ import pl.askutnik.edm.documents.model.Document;
 @RequestMapping("/api/documents")
 public class DocumentController {
 
-    private final Path uploadDirectory = Path.of("uploads");
+    private final Path uploadDirectory;
     private final DocumentRepository documentRepository;
 
-    public DocumentController(DocumentRepository documentRepository) throws IOException {
+    public DocumentController(
+        DocumentRepository documentRepository,
+        @Value("${app.upload-dir}") String uploadDirectory
+    ) throws IOException {
         this.documentRepository = documentRepository;
-        Files.createDirectories(uploadDirectory);
+        this.uploadDirectory = Path.of(uploadDirectory).toAbsolutePath().normalize();
+        Files.createDirectories(this.uploadDirectory);
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
