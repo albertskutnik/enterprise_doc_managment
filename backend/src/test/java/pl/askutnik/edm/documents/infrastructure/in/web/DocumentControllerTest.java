@@ -26,6 +26,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import pl.askutnik.edm.audit.infrastructure.out.persistence.AuditLogRepository;
+import pl.askutnik.edm.audit.model.AuditLog;
 import pl.askutnik.edm.documents.infrastructure.in.web.DocumentController.DocumentResponse;
 import pl.askutnik.edm.documents.infrastructure.out.persistence.DocumentRepository;
 import pl.askutnik.edm.documents.model.Document;
@@ -33,7 +35,9 @@ import pl.askutnik.edm.documents.model.Document;
 class DocumentControllerTest {
 
     private List<Document> documents;
+    private List<AuditLog> auditLogs;
     private DocumentRepository documentRepository;
+    private AuditLogRepository auditLogRepository;
     private DocumentController documentController;
 
     @TempDir
@@ -42,7 +46,9 @@ class DocumentControllerTest {
     @BeforeEach
     void setUp() throws IOException {
         documents = new ArrayList<>();
+        auditLogs = new ArrayList<>();
         documentRepository = mock(DocumentRepository.class);
+        auditLogRepository = mock(AuditLogRepository.class);
 
         when(documentRepository.save(any(Document.class))).thenAnswer(invocation -> {
             Document document = invocation.getArgument(0);
@@ -75,12 +81,23 @@ class DocumentControllerTest {
             return null;
         }).when(documentRepository).deleteById(any(UUID.class));
 
-        documentController = new DocumentController(documentRepository, uploadDirectory.toString());
+        when(auditLogRepository.save(any(AuditLog.class))).thenAnswer(invocation -> {
+            AuditLog auditLog = invocation.getArgument(0);
+            auditLogs.add(auditLog);
+            return auditLog;
+        });
+
+        documentController = new DocumentController(
+            documentRepository,
+            auditLogRepository,
+            uploadDirectory.toString()
+        );
     }
 
     @AfterEach
     void cleanUp() {
         documents.clear();
+        auditLogs.clear();
     }
 
     @Test
@@ -100,6 +117,8 @@ class DocumentControllerTest {
         assertEquals(5, response.size());
         assertNotNull(response.createdAt());
         assertEquals(1, documents.size());
+        assertEquals(1, auditLogs.size());
+        assertEquals("DOCUMENT_CREATED", auditLogs.get(0).getEventType());
     }
 
     @Test
@@ -191,6 +210,8 @@ class DocumentControllerTest {
         assertEquals("text/plain", response.getHeaders().getContentType().toString());
         assertNotNull(resource);
         assertArrayEquals(content, resource.getInputStream().readAllBytes());
+        assertEquals(2, auditLogs.size());
+        assertEquals("DOCUMENT_DOWNLOADED", auditLogs.get(1).getEventType());
     }
 
     @Test
@@ -206,6 +227,8 @@ class DocumentControllerTest {
         documentController.deleteDocument(createdDocument.id());
 
         assertEquals(0, documents.size());
+        assertEquals(2, auditLogs.size());
+        assertEquals("DOCUMENT_DELETED", auditLogs.get(1).getEventType());
         assertThrows(
             ResponseStatusException.class,
             () -> documentController.getDocumentById(createdDocument.id())

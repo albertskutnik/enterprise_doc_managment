@@ -28,6 +28,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import pl.askutnik.edm.audit.infrastructure.out.persistence.AuditLogRepository;
+import pl.askutnik.edm.audit.model.AuditLog;
 import pl.askutnik.edm.documents.infrastructure.out.persistence.DocumentRepository;
 import pl.askutnik.edm.documents.model.Document;
 
@@ -37,12 +39,15 @@ public class DocumentController {
 
     private final Path uploadDirectory;
     private final DocumentRepository documentRepository;
+    private final AuditLogRepository auditLogRepository;
 
     public DocumentController(
         DocumentRepository documentRepository,
+        AuditLogRepository auditLogRepository,
         @Value("${app.upload-dir}") String uploadDirectory
     ) throws IOException {
         this.documentRepository = documentRepository;
+        this.auditLogRepository = auditLogRepository;
         this.uploadDirectory = Path.of(uploadDirectory).toAbsolutePath().normalize();
         Files.createDirectories(this.uploadDirectory);
     }
@@ -72,7 +77,10 @@ public class DocumentController {
             storageFileName
         );
 
-        return DocumentResponse.from(documentRepository.save(document));
+        Document savedDocument = documentRepository.save(document);
+        saveAuditLog("DOCUMENT_CREATED", savedDocument, "Document was created");
+
+        return DocumentResponse.from(savedDocument);
     }
 
     @GetMapping
@@ -102,6 +110,8 @@ public class DocumentController {
         if (!resource.exists()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
+
+        saveAuditLog("DOCUMENT_DOWNLOADED", document, "Document was downloaded");
 
         return ResponseEntity.ok()
             .contentType(MediaType.parseMediaType(document.getContentType()))
@@ -163,5 +173,18 @@ public class DocumentController {
         Files.deleteIfExists(filePath);
 
         documentRepository.deleteById(id);
+        saveAuditLog("DOCUMENT_DELETED", document, "Document was deleted");
+    }
+
+    private void saveAuditLog(String eventType, Document document, String message) {
+        AuditLog auditLog = AuditLog.create(
+            eventType,
+            "DOCUMENT",
+            document.getId(),
+            true,
+            message
+        );
+
+        auditLogRepository.save(auditLog);
     }
 }
