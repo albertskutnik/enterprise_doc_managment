@@ -2,6 +2,7 @@ package pl.askutnik.edm.documents.model;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Test;
@@ -14,7 +15,8 @@ class DocumentTest {
             "test.pdf",
             "application/pdf",
             1234,
-            "stored-test.pdf"
+            "stored-test.pdf",
+            null
         );
 
         assertNotNull(document.getId());
@@ -22,6 +24,7 @@ class DocumentTest {
         assertEquals("application/pdf", document.getContentType());
         assertEquals(1234, document.getSize());
         assertEquals("stored-test.pdf", document.getStorageFileName());
+        assertNull(document.getFolderId());
         assertNotNull(document.getCreatedAt());
     }
 
@@ -33,7 +36,8 @@ class DocumentTest {
                 "",
                 "application/pdf",
                 1234,
-                "stored-test.pdf"
+                "stored-test.pdf",
+                null
             )
         );
 
@@ -48,7 +52,8 @@ class DocumentTest {
                 "test.pdf",
                 "application/pdf",
                 0,
-                "stored-test.pdf"
+                "stored-test.pdf",
+                null
             )
         );
 

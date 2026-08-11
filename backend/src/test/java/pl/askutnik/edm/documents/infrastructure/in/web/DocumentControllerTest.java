@@ -31,13 +31,17 @@ import pl.askutnik.edm.audit.model.AuditLog;
 import pl.askutnik.edm.documents.infrastructure.in.web.DocumentController.DocumentResponse;
 import pl.askutnik.edm.documents.infrastructure.out.persistence.DocumentRepository;
 import pl.askutnik.edm.documents.model.Document;
+import pl.askutnik.edm.folders.infrastructure.out.persistence.FolderRepository;
+import pl.askutnik.edm.folders.model.Folder;
 
 class DocumentControllerTest {
 
     private List<Document> documents;
     private List<AuditLog> auditLogs;
+    private List<Folder> folders;
     private DocumentRepository documentRepository;
     private AuditLogRepository auditLogRepository;
+    private FolderRepository folderRepository;
     private DocumentController documentController;
 
     @TempDir
@@ -47,8 +51,10 @@ class DocumentControllerTest {
     void setUp() throws IOException {
         documents = new ArrayList<>();
         auditLogs = new ArrayList<>();
+        folders = new ArrayList<>();
         documentRepository = mock(DocumentRepository.class);
         auditLogRepository = mock(AuditLogRepository.class);
+        folderRepository = mock(FolderRepository.class);
 
         when(documentRepository.save(any(Document.class))).thenAnswer(invocation -> {
             Document document = invocation.getArgument(0);
@@ -63,6 +69,14 @@ class DocumentControllerTest {
 
             return documents.stream()
                 .filter(document -> document.getName().toLowerCase().contains(name.toLowerCase()))
+                .toList();
+        });
+
+        when(documentRepository.findByFolderId(any(UUID.class))).thenAnswer(invocation -> {
+            UUID folderId = invocation.getArgument(0);
+
+            return documents.stream()
+                .filter(document -> folderId.equals(document.getFolderId()))
                 .toList();
         });
 
@@ -81,6 +95,13 @@ class DocumentControllerTest {
             return null;
         }).when(documentRepository).deleteById(any(UUID.class));
 
+        when(folderRepository.existsById(any(UUID.class))).thenAnswer(invocation -> {
+            UUID id = invocation.getArgument(0);
+
+            return folders.stream()
+                .anyMatch(folder -> folder.getId().equals(id));
+        });
+
         when(auditLogRepository.save(any(AuditLog.class))).thenAnswer(invocation -> {
             AuditLog auditLog = invocation.getArgument(0);
             auditLogs.add(auditLog);
@@ -90,6 +111,7 @@ class DocumentControllerTest {
         documentController = new DocumentController(
             documentRepository,
             auditLogRepository,
+            folderRepository,
             uploadDirectory.toString()
         );
     }
@@ -98,6 +120,7 @@ class DocumentControllerTest {
     void cleanUp() {
         documents.clear();
         auditLogs.clear();
+        folders.clear();
     }
 
     @Test
@@ -109,7 +132,7 @@ class DocumentControllerTest {
             "hello".getBytes()
         );
 
-        DocumentResponse response = documentController.createDocument(file);
+        DocumentResponse response = documentController.createDocument(file, null);
 
         assertNotNull(response.id());
         assertEquals("test.txt", response.name());
@@ -136,8 +159,8 @@ class DocumentControllerTest {
             "second".getBytes()
         );
 
-        documentController.createDocument(firstFile);
-        documentController.createDocument(secondFile);
+        documentController.createDocument(firstFile, null);
+        documentController.createDocument(secondFile, null);
 
         assertEquals(2, documentController.listDocuments(null).size());
     }
@@ -157,13 +180,47 @@ class DocumentControllerTest {
             "contract".getBytes()
         );
 
-        documentController.createDocument(firstFile);
-        documentController.createDocument(secondFile);
+        documentController.createDocument(firstFile, null);
+        documentController.createDocument(secondFile, null);
 
         List<DocumentResponse> foundDocuments = documentController.listDocuments("voice");
 
         assertEquals(1, foundDocuments.size());
         assertEquals("invoice.txt", foundDocuments.get(0).name());
+    }
+
+    @Test
+    void shouldCreateDocumentInFolder() throws IOException {
+        Folder folder = Folder.create("Invoices");
+        folders.add(folder);
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "invoice.txt",
+            "text/plain",
+            "invoice".getBytes()
+        );
+
+        DocumentResponse response = documentController.createDocument(file, folder.getId());
+
+        assertEquals(folder.getId(), response.folderId());
+        assertEquals(folder.getId(), documents.get(0).getFolderId());
+    }
+
+    @Test
+    void shouldReturnNotFoundWhenFolderDoesNotExistDuringUpload() {
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "invoice.txt",
+            "text/plain",
+            "invoice".getBytes()
+        );
+
+        ResponseStatusException exception = assertThrows(
+            ResponseStatusException.class,
+            () -> documentController.createDocument(file, UUID.randomUUID())
+        );
+
+        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
     }
 
     @Test
@@ -174,7 +231,7 @@ class DocumentControllerTest {
             "text/plain",
             "hello".getBytes()
         );
-        DocumentResponse createdDocument = documentController.createDocument(file);
+        DocumentResponse createdDocument = documentController.createDocument(file, null);
 
         DocumentResponse foundDocument = documentController.getDocumentById(createdDocument.id());
 
@@ -201,7 +258,7 @@ class DocumentControllerTest {
             "text/plain",
             content
         );
-        DocumentResponse createdDocument = documentController.createDocument(file);
+        DocumentResponse createdDocument = documentController.createDocument(file, null);
 
         ResponseEntity<Resource> response = documentController.downloadDocument(createdDocument.id());
         Resource resource = response.getBody();
@@ -222,7 +279,7 @@ class DocumentControllerTest {
             "text/plain",
             "hello".getBytes()
         );
-        DocumentResponse createdDocument = documentController.createDocument(file);
+        DocumentResponse createdDocument = documentController.createDocument(file, null);
 
         documentController.deleteDocument(createdDocument.id());
 
@@ -246,7 +303,7 @@ class DocumentControllerTest {
 
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
-            () -> documentController.createDocument(file)
+            () -> documentController.createDocument(file, null)
         );
 
         assertEquals("File cannot be empty", exception.getMessage());

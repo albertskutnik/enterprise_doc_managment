@@ -18,6 +18,7 @@ public class Document {
     private String contentType;
     private long size;
     private String storageFileName;
+    private UUID folderId;
     private Instant createdAt;
 
     protected Document() {
@@ -29,6 +30,7 @@ public class Document {
         String contentType,
         long size,
         String storageFileName,
+        UUID folderId,
         Instant createdAt
     ) {
         if (id == null) {
@@ -60,16 +62,24 @@ public class Document {
         this.contentType = contentType;
         this.size = size;
         this.storageFileName = storageFileName;
+        this.folderId = folderId;
         this.createdAt = createdAt;
     }
 
-    public static Document create(String name, String contentType, long size, String storageFileName) {
+    public static Document create(
+        String name,
+        String contentType,
+        long size,
+        String storageFileName,
+        UUID folderId
+    ) {
         return new Document(
             UUID.randomUUID(),
             name,
             contentType,
             size,
             storageFileName,
+            folderId,
             Instant.now()
         );
     }
@@ -92,6 +102,10 @@ public class Document {
 
     public String getStorageFileName() {
         return storageFileName;
+    }
+
+    public UUID getFolderId() {
+        return folderId;
     }
 
     public Instant getCreatedAt() {

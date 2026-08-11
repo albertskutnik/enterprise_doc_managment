@@ -9,4 +9,6 @@ import pl.askutnik.edm.documents.model.Document;
 
 public interface DocumentRepository extends JpaRepository<Document, UUID> {
     List<Document> findByNameContainingIgnoreCase(String name);
+
+    List<Document> findByFolderId(UUID folderId);
 }

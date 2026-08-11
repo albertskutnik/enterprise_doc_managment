@@ -32,6 +32,7 @@ import pl.askutnik.edm.audit.infrastructure.out.persistence.AuditLogRepository;
 import pl.askutnik.edm.audit.model.AuditLog;
 import pl.askutnik.edm.documents.infrastructure.out.persistence.DocumentRepository;
 import pl.askutnik.edm.documents.model.Document;
+import pl.askutnik.edm.folders.infrastructure.out.persistence.FolderRepository;
 
 @RestController
 @RequestMapping("/api/documents")
@@ -40,23 +41,33 @@ public class DocumentController {
     private final Path uploadDirectory;
     private final DocumentRepository documentRepository;
     private final AuditLogRepository auditLogRepository;
+    private final FolderRepository folderRepository;
 
     public DocumentController(
         DocumentRepository documentRepository,
         AuditLogRepository auditLogRepository,
+        FolderRepository folderRepository,
         @Value("${app.upload-dir}") String uploadDirectory
     ) throws IOException {
         this.documentRepository = documentRepository;
         this.auditLogRepository = auditLogRepository;
+        this.folderRepository = folderRepository;
         this.uploadDirectory = Path.of(uploadDirectory).toAbsolutePath().normalize();
         Files.createDirectories(this.uploadDirectory);
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    public DocumentResponse createDocument(@RequestParam("file") MultipartFile file) throws IOException {
+    public DocumentResponse createDocument(
+        @RequestParam("file") MultipartFile file,
+        @RequestParam(name = "folderId", required = false) UUID folderId
+    ) throws IOException {
         if (file.isEmpty()) {
             throw new IllegalArgumentException("File cannot be empty");
+        }
+
+        if (folderId != null && !folderRepository.existsById(folderId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
 
         String originalFileName = file.getOriginalFilename();
@@ -74,7 +85,8 @@ public class DocumentController {
             originalFileName,
             file.getContentType(),
             file.getSize(),
-            storageFileName
+            storageFileName,
+            folderId
         );
 
         Document savedDocument = documentRepository.save(document);
@@ -84,7 +96,7 @@ public class DocumentController {
     }
 
     @GetMapping
-    public List<DocumentResponse> listDocuments(@RequestParam(required = false) String name) {
+    public List<DocumentResponse> listDocuments(@RequestParam(name = "name", required = false) String name) {
         List<Document> documents = findDocuments(name);
 
         return documents
@@ -149,6 +161,7 @@ public class DocumentController {
         String name,
         String contentType,
         long size,
+        UUID folderId,
         Instant createdAt
     ) {
         public static DocumentResponse from(Document document) {
@@ -157,6 +170,7 @@ public class DocumentController {
                 document.getName(),
                 document.getContentType(),
                 document.getSize(),
+                document.getFolderId(),
                 document.getCreatedAt()
             );
         }
