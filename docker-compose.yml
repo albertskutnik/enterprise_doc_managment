@@ -2,7 +2,7 @@ services:
   postgres:
     image: postgres:16
     container_name: edm-postgres
-    enviroment:
+    environment:
       POSTGRES_DB: edm
       POSTGRES_USER: edm
       POSTGRES_PASSWORD: edm
