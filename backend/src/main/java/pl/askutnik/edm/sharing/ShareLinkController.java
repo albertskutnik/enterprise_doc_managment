@@ -35,17 +35,20 @@ public class ShareLinkController {
     private final DocumentRepository documentRepository;
     private final ShareLinkRepository shareLinkRepository;
     private final AuditLogRepository auditLogRepository;
+    private final String backendUrl;
 
     public ShareLinkController(
         DocumentRepository documentRepository,
         ShareLinkRepository shareLinkRepository,
         AuditLogRepository auditLogRepository,
-        @Value("${app.upload-dir}") String uploadDirectory
+        @Value("${app.upload-dir}") String uploadDirectory,
+        @Value("${app.backend-url:http://localhost:8080}") String backendUrl
     ) {
         this.documentRepository = documentRepository;
         this.shareLinkRepository = shareLinkRepository;
         this.auditLogRepository = auditLogRepository;
         this.uploadDirectory = Path.of(uploadDirectory).toAbsolutePath().normalize();
+        this.backendUrl = backendUrl;
     }
 
     @PostMapping("/documents/{documentId}/share-links")
@@ -70,7 +73,7 @@ public class ShareLinkController {
             "Share link was created"
         ));
 
-        return ShareLinkResponse.from(savedShareLink);
+        return ShareLinkResponse.from(savedShareLink, backendUrl);
     }
 
     @GetMapping("/share-links/{token}/download")
@@ -129,16 +132,20 @@ public class ShareLinkController {
         UUID documentId,
         Instant expiresAt,
         Instant createdAt,
-        String downloadPath
+        String downloadPath,
+        String downloadUrl
     ) {
-        public static ShareLinkResponse from(ShareLink shareLink) {
+        public static ShareLinkResponse from(ShareLink shareLink, String backendUrl) {
+            String downloadPath = "/api/share-links/" + shareLink.getToken() + "/download";
+
             return new ShareLinkResponse(
                 shareLink.getId(),
                 shareLink.getToken(),
                 shareLink.getDocumentId(),
                 shareLink.getExpiresAt(),
                 shareLink.getCreatedAt(),
-                "/api/share-links/" + shareLink.getToken() + "/download"
+                downloadPath,
+                backendUrl + downloadPath
             );
         }
     }

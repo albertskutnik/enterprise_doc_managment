@@ -82,7 +82,8 @@ class ShareLinkControllerTest {
             documentRepository,
             shareLinkRepository,
             auditLogRepository,
-            uploadDirectory.toString()
+            uploadDirectory.toString(),
+            "http://localhost:8080"
         );
     }
 
@@ -108,6 +109,7 @@ class ShareLinkControllerTest {
         assertNotNull(response.expiresAt());
         assertNotNull(response.createdAt());
         assertEquals("/api/share-links/" + response.token() + "/download", response.downloadPath());
+        assertEquals("http://localhost:8080/api/share-links/" + response.token() + "/download", response.downloadUrl());
         assertEquals(1, shareLinks.size());
         assertEquals(1, auditLogs.size());
         assertEquals("SHARE_LINK_CREATED", auditLogs.get(0).getEventType());

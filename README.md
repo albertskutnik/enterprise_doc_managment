@@ -25,3 +25,44 @@ Cały system (frontend, backend, baza, S3, reverse proxy) zostanie podzielony na
 ### 10. Bezpieczeństwo**
 
 ### 11-14. Podręczniki, Podsumowanie, Bibliografia**
+
+### Jak uruchomic demo
+
+1. Uruchom baze danych:
+
+```bash
+docker compose up -d
+```
+
+2. Uruchom backend:
+
+```bash
+cd backend
+mvn spring-boot:run
+```
+
+3. Wgraj plik:
+
+```bash
+curl -F "file=@README.md" http://localhost:8080/api/documents
+```
+
+4. Wyswietl dokumenty:
+
+```bash
+curl http://localhost:8080/api/documents
+```
+
+5. Utworz link do pobrania. W miejsce DOCUMENT_ID wpisz id dokumentu z poprzedniej komendy:
+
+```bash
+curl -X POST http://localhost:8080/api/documents/DOCUMENT_ID/share-links \
+  -H "Content-Type: application/json" \
+  -d '{"expiresInHours":24}'
+```
+
+6. Pobierz plik przez link. Uzyj pola downloadUrl z poprzedniej odpowiedzi:
+
+```bash
+curl -O -J "DOWNLOAD_URL"
+```
