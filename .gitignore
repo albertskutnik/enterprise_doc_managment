@@ -4,3 +4,5 @@ backend/uploads/
 backend/.env
 backend/src/main/resources/application-local.properties
 backend/target
+frontend/node_modules
+frontend/package-lock.json
