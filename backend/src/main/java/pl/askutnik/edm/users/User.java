@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.util.UUID;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
@@ -14,32 +16,38 @@ public class User {
     @Id
     private UUID id;
 
-    private String username;
-    private String role;
+    private String email;
+    private String password;
+
+    @Enumerated(EnumType.STRING)
+    private UserRole role;
+
     private Instant createdAt;
 
     protected User() {
     }
 
-    private User(UUID id, String username, String role, Instant createdAt) {
-        if (username == null || username.isBlank()) {
-            throw new IllegalArgumentException("Username cannot be empty");
+    private User(UUID id, String email, String password, UserRole role, Instant createdAt) {
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("Email cannot be empty");
         }
 
-        if (role == null || role.isBlank()) {
-            throw new IllegalArgumentException("Role cannot be empty");
+        if (password == null || password.isBlank()) {
+            throw new IllegalArgumentException("Password cannot be empty");
         }
 
         this.id = id;
-        this.username = username;
+        this.email = email;
+        this.password = password;
         this.role = role;
         this.createdAt = createdAt;
     }
 
-    public static User create(String username, String role) {
+    public static User create(String email, String password, UserRole role) {
         return new User(
             UUID.randomUUID(),
-            username,
+            email,
+            password,
             role,
             Instant.now()
         );
@@ -49,11 +57,15 @@ public class User {
         return id;
     }
 
-    public String getUsername() {
-        return username;
+    public String getEmail() {
+        return email;
     }
 
-    public String getRole() {
+    public String getPassword() {
+        return password;
+    }
+
+    public UserRole getRole() {
         return role;
     }
 
