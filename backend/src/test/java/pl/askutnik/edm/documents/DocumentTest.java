@@ -5,18 +5,23 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.UUID;
+
 import org.junit.jupiter.api.Test;
 
 class DocumentTest {
 
     @Test
     void shouldCreateDocument() {
+        UUID ownerId = UUID.randomUUID();
+
         Document document = Document.create(
             "test.pdf",
             "application/pdf",
             1234,
             "stored-test.pdf",
-            null
+            null,
+            ownerId
         );
 
         assertNotNull(document.getId());
@@ -25,6 +30,7 @@ class DocumentTest {
         assertEquals(1234, document.getSize());
         assertEquals("stored-test.pdf", document.getStorageFileName());
         assertNull(document.getFolderId());
+        assertEquals(ownerId, document.getOwnerId());
         assertNotNull(document.getCreatedAt());
     }
 
@@ -37,7 +43,8 @@ class DocumentTest {
                 "application/pdf",
                 1234,
                 "stored-test.pdf",
-                null
+                null,
+                UUID.randomUUID()
             )
         );
 
@@ -53,7 +60,8 @@ class DocumentTest {
                 "application/pdf",
                 0,
                 "stored-test.pdf",
-                null
+                null,
+                UUID.randomUUID()
             )
         );
 

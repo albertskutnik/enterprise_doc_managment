@@ -9,4 +9,6 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
     List<Document> findByNameContainingIgnoreCase(String name);
 
     List<Document> findByFolderId(UUID folderId);
+
+    List<Document> findByOwnerId(UUID ownerId);
 }

@@ -130,13 +130,15 @@ class FolderControllerTest {
             "text/plain",
             123,
             "stored-invoice.txt",
-            folder.getId()
+            folder.getId(),
+            UUID.randomUUID()
         ));
         documents.add(Document.create(
             "contract.txt",
             "text/plain",
             123,
             "stored-contract.txt",
+            UUID.randomUUID(),
             UUID.randomUUID()
         ));
 

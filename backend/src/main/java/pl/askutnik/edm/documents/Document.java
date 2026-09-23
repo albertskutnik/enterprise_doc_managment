@@ -20,6 +20,7 @@ public class Document {
     private String storageFileName;
     private UUID folderId;
     private Instant createdAt;
+    private UUID ownerId;
 
     protected Document() {
     }
@@ -31,7 +32,8 @@ public class Document {
         long size,
         String storageFileName,
         UUID folderId,
-        Instant createdAt
+        Instant createdAt,
+        UUID ownerId
     ) {
         if (id == null) {
             throw new IllegalArgumentException("Document id cannot be empty");
@@ -64,6 +66,7 @@ public class Document {
         this.storageFileName = storageFileName;
         this.folderId = folderId;
         this.createdAt = createdAt;
+        this.ownerId = ownerId;
     }
 
     public static Document create(
@@ -71,7 +74,8 @@ public class Document {
         String contentType,
         long size,
         String storageFileName,
-        UUID folderId
+        UUID folderId,
+        UUID ownerId
     ) {
         return new Document(
             UUID.randomUUID(),
@@ -80,7 +84,8 @@ public class Document {
             size,
             storageFileName,
             folderId,
-            Instant.now()
+            Instant.now(),
+            ownerId
         );
     }
 
@@ -110,5 +115,9 @@ public class Document {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public UUID getOwnerId() {
+        return ownerId;
     }
 }

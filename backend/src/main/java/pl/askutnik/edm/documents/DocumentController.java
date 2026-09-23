@@ -5,6 +5,7 @@ import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -31,6 +33,9 @@ import org.springframework.web.server.ResponseStatusException;
 import pl.askutnik.edm.audit.AuditLog;
 import pl.askutnik.edm.audit.AuditLogRepository;
 import pl.askutnik.edm.folders.FolderRepository;
+import pl.askutnik.edm.users.User;
+import pl.askutnik.edm.users.UserRepository;
+import pl.askutnik.edm.users.UserRole;
 
 @RestController
 @RequestMapping("/api/documents")
@@ -40,16 +45,22 @@ public class DocumentController {
     private final DocumentRepository documentRepository;
     private final AuditLogRepository auditLogRepository;
     private final FolderRepository folderRepository;
+    private final DocumentAccessRepository documentAccessRepository;
+    private final UserRepository userRepository;
 
     public DocumentController(
         DocumentRepository documentRepository,
         AuditLogRepository auditLogRepository,
         FolderRepository folderRepository,
+        DocumentAccessRepository documentAccessRepository,
+        UserRepository userRepository,
         @Value("${app.upload-dir}") String uploadDirectory
     ) throws IOException {
         this.documentRepository = documentRepository;
         this.auditLogRepository = auditLogRepository;
         this.folderRepository = folderRepository;
+        this.documentAccessRepository = documentAccessRepository;
+        this.userRepository = userRepository;
         this.uploadDirectory = Path.of(uploadDirectory).toAbsolutePath().normalize();
         Files.createDirectories(this.uploadDirectory);
     }
@@ -58,6 +69,7 @@ public class DocumentController {
     @ResponseStatus(HttpStatus.CREATED)
     public DocumentResponse createDocument(
         @RequestParam("file") MultipartFile file,
+        @RequestParam("ownerId") UUID ownerId,
         @RequestParam(name = "folderId", required = false) UUID folderId
     ) throws IOException {
         if (file.isEmpty()) {
@@ -65,6 +77,10 @@ public class DocumentController {
         }
 
         if (folderId != null && !folderRepository.existsById(folderId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+
+        if (!userRepository.existsById(ownerId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
 
@@ -84,7 +100,8 @@ public class DocumentController {
             file.getContentType(),
             file.getSize(),
             storageFileName,
-            folderId
+            folderId,
+            ownerId
         );
 
         Document savedDocument = documentRepository.save(document);
@@ -94,13 +111,109 @@ public class DocumentController {
     }
 
     @GetMapping
-    public List<DocumentResponse> listDocuments(@RequestParam(name = "name", required = false) String name) {
-        List<Document> documents = findDocuments(name);
+    public List<DocumentResponse> listDocuments(
+        @RequestParam UUID userId,
+        @RequestParam(name = "name", required = false) String name
+    ) {
+        User user = findUser(userId);
 
-        return documents
-            .stream()
+        List<Document> documents;
+
+        if (user.getRole() == UserRole.ADMIN) {
+            documents = documentRepository.findAll();
+        } else {
+            List<Document> ownedDocuments = documentRepository.findByOwnerId(userId);
+
+            List<UUID> sharedDocumentIds = documentAccessRepository.findByUserId(userId)
+                .stream()
+                .map(DocumentAccess::getDocumentId)
+                .toList();
+
+            List<Document> sharedDocuments = documentRepository.findAllById(sharedDocumentIds);
+
+            documents = new ArrayList<>();
+            documents.addAll(ownedDocuments);
+            documents.addAll(sharedDocuments);
+        }
+
+        if (name != null && !name.isBlank()) {
+            documents = documents.stream()
+                .filter(document -> document.getName().toLowerCase().contains(name.toLowerCase()))
+                .toList();
+        }
+
+        return documents.stream()
             .map(DocumentResponse::from)
             .toList();
+    }
+
+    @GetMapping("/{id}/access")
+    public List<DocumentAccessResponse> listAccess(
+        @PathVariable UUID id,
+        @RequestParam UUID requesterId
+    ) {
+        User requester = findUser(requesterId);
+        Document document = findDocument(id);
+
+        if (!canManageAccess(requester, document)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        }
+
+        return documentAccessRepository.findByDocumentId(id)
+            .stream()
+            .map(DocumentAccessResponse::from)
+            .toList();
+    }
+
+
+    @PostMapping("/{id}/access")
+    @ResponseStatus(HttpStatus.CREATED)
+    public DocumentAccessResponse addAccess(
+        @PathVariable UUID id,
+        @RequestParam UUID requesterId,
+        @RequestBody AddAccessRequest request
+    ) {
+        User requester = findUser(requesterId);
+        Document document = findDocument(id);
+
+        if (!canManageAccess(requester, document)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        }
+
+        if (!userRepository.existsById(request.userId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+
+        if (documentAccessRepository.existsByDocumentIdAndUserId(id, request.userId())) {
+            throw new IllegalArgumentException("User already has access");
+        }
+
+        DocumentAccess access = DocumentAccess.create(
+            id,
+            request.userId(),
+            request.accessType()
+        );
+
+        DocumentAccess savedAccess = documentAccessRepository.save(access);
+
+        return DocumentAccessResponse.from(savedAccess);
+    }
+
+    @DeleteMapping("/{id}/access/{userId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteAccess(
+        @PathVariable UUID id,
+        @PathVariable UUID userId,
+        @RequestParam UUID requesterId
+    ) {
+        User requester = findUser(requesterId);
+        Document document = findDocument(id);
+
+        if (!canManageAccess(requester, document)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        }
+
+        documentAccessRepository.deleteByDocumentIdAndUserId(id, userId);
     }
 
     @GetMapping("/{id}")
@@ -140,12 +253,17 @@ public class DocumentController {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
 
-    private List<Document> findDocuments(String name) {
-        if (name == null || name.isBlank()) {
-            return documentRepository.findAll();
+    private User findUser(UUID id) {
+        return userRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+    }
+
+    private boolean canManageAccess(User user, Document document) {
+        if (user.getRole() == UserRole.ADMIN) {
+            return true;
         }
 
-        return documentRepository.findByNameContainingIgnoreCase(name);
+        return user.getId().equals(document.getOwnerId());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -160,6 +278,7 @@ public class DocumentController {
         String contentType,
         long size,
         UUID folderId,
+        UUID ownerId,
         Instant createdAt
     ) {
         public static DocumentResponse from(Document document) {
@@ -169,7 +288,32 @@ public class DocumentController {
                 document.getContentType(),
                 document.getSize(),
                 document.getFolderId(),
+                document.getOwnerId(),
                 document.getCreatedAt()
+            );
+        }
+    }
+
+    public record AddAccessRequest(
+        UUID userId,
+        String accessType
+    ) {
+    }
+
+    public record DocumentAccessResponse(
+        UUID id,
+        UUID documentId,
+        UUID userId,
+        String accessType,
+        Instant createdAt
+    ) {
+        public static DocumentAccessResponse from(DocumentAccess access) {
+            return new DocumentAccessResponse(
+                access.getId(),
+                access.getDocumentId(),
+                access.getUserId(),
+                access.getAccessType(),
+                access.getCreatedAt()
             );
         }
     }

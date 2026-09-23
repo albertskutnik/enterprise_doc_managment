@@ -94,7 +94,8 @@ class ShareLinkControllerTest {
             "text/plain",
             5,
             "stored-test.txt",
-            null
+            null,
+            UUID.randomUUID()
         );
         documents.add(document);
 
@@ -138,7 +139,8 @@ class ShareLinkControllerTest {
             "text/plain",
             content.length,
             storageFileName,
-            null
+            null,
+            UUID.randomUUID()
         );
         ShareLink shareLink = ShareLink.create(
             document.getId(),
