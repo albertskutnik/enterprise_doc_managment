@@ -28,6 +28,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import pl.askutnik.edm.audit.AuditLog;
 import pl.askutnik.edm.audit.AuditLogRepository;
+import pl.askutnik.edm.documents.DocumentController.AddAccessRequest;
+import pl.askutnik.edm.documents.DocumentController.DocumentAccessResponse;
 import pl.askutnik.edm.documents.DocumentController.DocumentResponse;
 import pl.askutnik.edm.folders.Folder;
 import pl.askutnik.edm.folders.FolderRepository;
@@ -165,6 +167,13 @@ class DocumentControllerTest {
 
             return null;
         }).when(documentAccessRepository).deleteByDocumentIdAndUserId(any(UUID.class), any(UUID.class));
+
+        doAnswer(invocation -> {
+            UUID documentId = invocation.getArgument(0);
+            documentAccesses.removeIf(documentAccess -> documentId.equals(documentAccess.getDocumentId()));
+
+            return null;
+        }).when(documentAccessRepository).deleteByDocumentId(any(UUID.class));
 
         doAnswer(invocation -> {
             UUID id = invocation.getArgument(0);
@@ -331,7 +340,7 @@ class DocumentControllerTest {
         );
         DocumentResponse createdDocument = documentController.createDocument(file, owner.getId(), null);
 
-        DocumentResponse foundDocument = documentController.getDocumentById(createdDocument.id());
+        DocumentResponse foundDocument = documentController.getDocumentById(createdDocument.id(), owner.getId());
 
         assertEquals(createdDocument.id(), foundDocument.id());
         assertEquals("test.txt", foundDocument.name());
@@ -341,10 +350,48 @@ class DocumentControllerTest {
     void shouldReturnNotFoundWhenDocumentDoesNotExist() {
         ResponseStatusException exception = assertThrows(
             ResponseStatusException.class,
-            () -> documentController.getDocumentById(UUID.randomUUID())
+            () -> documentController.getDocumentById(UUID.randomUUID(), owner.getId())
         );
 
         assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+    }
+
+    @Test
+    void shouldReturnForbiddenWhenUserDoesNotHaveAccessToDocument() throws IOException {
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "test.txt",
+            "text/plain",
+            "hello".getBytes()
+        );
+        DocumentResponse createdDocument = documentController.createDocument(file, owner.getId(), null);
+
+        ResponseStatusException exception = assertThrows(
+            ResponseStatusException.class,
+            () -> documentController.getDocumentById(createdDocument.id(), otherUser.getId())
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+    }
+
+    @Test
+    void shouldAllowUserWithDocumentAccessToGetDocument() throws IOException {
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "test.txt",
+            "text/plain",
+            "hello".getBytes()
+        );
+        DocumentResponse createdDocument = documentController.createDocument(file, owner.getId(), null);
+        documentController.addAccess(
+            createdDocument.id(),
+            owner.getId(),
+            new AddAccessRequest(otherUser.getId(), "READ")
+        );
+
+        DocumentResponse foundDocument = documentController.getDocumentById(createdDocument.id(), otherUser.getId());
+
+        assertEquals(createdDocument.id(), foundDocument.id());
     }
 
     @Test
@@ -358,7 +405,7 @@ class DocumentControllerTest {
         );
         DocumentResponse createdDocument = documentController.createDocument(file, owner.getId(), null);
 
-        ResponseEntity<Resource> response = documentController.downloadDocument(createdDocument.id());
+        ResponseEntity<Resource> response = documentController.downloadDocument(createdDocument.id(), owner.getId());
         Resource resource = response.getBody();
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -379,15 +426,73 @@ class DocumentControllerTest {
         );
         DocumentResponse createdDocument = documentController.createDocument(file, owner.getId(), null);
 
-        documentController.deleteDocument(createdDocument.id());
+        documentController.deleteDocument(createdDocument.id(), owner.getId());
 
         assertEquals(0, documents.size());
         assertEquals(2, auditLogs.size());
         assertEquals("DOCUMENT_DELETED", auditLogs.get(1).getEventType());
         assertThrows(
             ResponseStatusException.class,
-            () -> documentController.getDocumentById(createdDocument.id())
+            () -> documentController.getDocumentById(createdDocument.id(), owner.getId())
         );
+    }
+
+    @Test
+    void shouldAllowAdminToDeleteDocument() throws IOException {
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "test.txt",
+            "text/plain",
+            "hello".getBytes()
+        );
+        DocumentResponse createdDocument = documentController.createDocument(file, owner.getId(), null);
+
+        documentController.deleteDocument(createdDocument.id(), admin.getId());
+
+        assertEquals(0, documents.size());
+    }
+
+    @Test
+    void shouldReturnForbiddenWhenUserTriesToDeleteOtherUserDocument() throws IOException {
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "test.txt",
+            "text/plain",
+            "hello".getBytes()
+        );
+        DocumentResponse createdDocument = documentController.createDocument(file, owner.getId(), null);
+
+        ResponseStatusException exception = assertThrows(
+            ResponseStatusException.class,
+            () -> documentController.deleteDocument(createdDocument.id(), otherUser.getId())
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+    }
+
+    @Test
+    void shouldAddAndDeleteDocumentAccess() throws IOException {
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "test.txt",
+            "text/plain",
+            "hello".getBytes()
+        );
+        DocumentResponse createdDocument = documentController.createDocument(file, owner.getId(), null);
+
+        DocumentAccessResponse access = documentController.addAccess(
+            createdDocument.id(),
+            owner.getId(),
+            new AddAccessRequest(otherUser.getId(), "READ")
+        );
+
+        assertNotNull(access.id());
+        assertEquals(otherUser.getId(), access.userId());
+        assertEquals(1, documentAccesses.size());
+
+        documentController.deleteAccess(createdDocument.id(), otherUser.getId(), owner.getId());
+
+        assertEquals(0, documentAccesses.size());
     }
 
     @Test

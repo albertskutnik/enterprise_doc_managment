@@ -36,6 +36,10 @@ public class User {
             throw new IllegalArgumentException("Password cannot be empty");
         }
 
+        if (role == null) {
+            throw new IllegalArgumentException("Role cannot be empty");
+        }
+
         this.id = id;
         this.email = email;
         this.password = password;

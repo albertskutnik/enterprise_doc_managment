@@ -217,15 +217,31 @@ public class DocumentController {
     }
 
     @GetMapping("/{id}")
-    public DocumentResponse getDocumentById(@PathVariable UUID id) {
+    public DocumentResponse getDocumentById(
+        @PathVariable UUID id,
+        @RequestParam UUID userId
+    ) {
+        User user = findUser(userId);
         Document document = findDocument(id);
+
+        if (!canReadDocument(user, document)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        }
 
         return DocumentResponse.from(document);
     }
 
     @GetMapping("/{id}/download")
-    public ResponseEntity<Resource> downloadDocument(@PathVariable UUID id) throws MalformedURLException {
+    public ResponseEntity<Resource> downloadDocument(
+        @PathVariable UUID id,
+        @RequestParam UUID userId
+    ) throws MalformedURLException {
+        User user = findUser(userId);
         Document document = findDocument(id);
+
+        if (!canReadDocument(user, document)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        }
 
         Path filePath = uploadDirectory.resolve(document.getStorageFileName());
         Resource resource = new UrlResource(filePath.toUri());
@@ -264,6 +280,18 @@ public class DocumentController {
         }
 
         return user.getId().equals(document.getOwnerId());
+    }
+
+    private boolean canReadDocument(User user, Document document) {
+        if (user.getRole() == UserRole.ADMIN) {
+            return true;
+        }
+
+        if (user.getId().equals(document.getOwnerId())) {
+            return true;
+        }
+
+        return documentAccessRepository.existsByDocumentIdAndUserId(document.getId(), user.getId());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -323,11 +351,21 @@ public class DocumentController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteDocument(@PathVariable UUID id) throws IOException {
+    public void deleteDocument(
+        @PathVariable UUID id,
+        @RequestParam UUID userId
+    ) throws IOException {
+        User user = findUser(userId);
         Document document = findDocument(id);
+
+        if (!canManageAccess(user, document)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        }
+
         Path filePath = uploadDirectory.resolve(document.getStorageFileName());
         Files.deleteIfExists(filePath);
 
+        documentAccessRepository.deleteByDocumentId(id);
         documentRepository.deleteById(id);
         saveAuditLog("DOCUMENT_DELETED", document, "Document was deleted");
     }

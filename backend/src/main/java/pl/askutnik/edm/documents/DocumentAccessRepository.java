@@ -16,4 +16,7 @@ public interface DocumentAccessRepository extends JpaRepository<DocumentAccess, 
 
     @Transactional
     void deleteByDocumentIdAndUserId(UUID documentId, UUID userId);
+
+    @Transactional
+    void deleteByDocumentId(UUID documentId);
 }
